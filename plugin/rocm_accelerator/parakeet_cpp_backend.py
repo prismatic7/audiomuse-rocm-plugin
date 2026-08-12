@@ -13,9 +13,8 @@ Registered as core's ``asr`` analysis provider, same contract
 ``is_loaded`` / ``unload`` / ``reset_session``, same return shape.
 
 Same CLI-per-call design as ``whisper_cpp_backend.py`` - see that module's
-docstring for why. The HIP variant is confirmed broken on gfx803 (silent
-empty output, see ``docs/ASR_BACKENDS.md``); ``Gfx803Profile.blocked_asr_backends``
-refuses that combo before this module is ever reached.
+docstring for why. Both variants, on every arch including gfx803, are
+confirmed working - see ``docs/ASR_BACKENDS.md``.
 """
 
 from __future__ import annotations
@@ -59,9 +58,8 @@ def _binary_path() -> str:
 
 def available(variant: Optional[str] = None) -> bool:
     binary = os.path.join(_BIN_DIR, f"parakeet-cli-{variant or _variant}")
-    # size check, not just isfile(): the HIP build is skipped at image-build
-    # time on gfx803 (confirmed broken) and an empty placeholder is copied in
-    # its place instead - see docker/Dockerfile's parakeet-cpp-hip stage.
+    # size check, not just isfile(): guards against a build that copied in an
+    # empty/truncated binary rather than a real one.
     return os.path.isfile(binary) and os.path.getsize(binary) > 0 and os.path.isfile(_MODEL)
 
 

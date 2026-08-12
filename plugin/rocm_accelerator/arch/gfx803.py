@@ -6,60 +6,25 @@
 # the terms of the GNU Affero General Public License v3.0. See the LICENSE file
 # in the project root or <https://github.com/NeptuneHub/AudioMuse-AI/blob/main/LICENSE>
 
-"""Polaris / GCN 4. Every deviation here is forced by its ROCm 6 based image.
+"""Polaris / GCN 4. Deviations here are forced by hardware limits specific to
+this arch, not by its base image - it builds on the same ROCm 7.14 base
+(Schaka/rocm-gfx803) as every other arch.
 
 Full findings behind each one: ``docs/ARCH_NOTES.md``.
 """
 
 from types import MappingProxyType
 
-from ..providers import ROCM
-from .base import ArchProfile, ProviderSpec
+from .base import ArchProfile
 
 
 class Gfx803Profile(ArchProfile):
     arches = frozenset({"gfx803", "gfx802", "gfx805"})
 
-    # arlo-phoenix/CTranslate2-rocm's "rocm" branch (what this arch builds
-    # against) carries the same CT2_CUDA_ALLOCATOR/cub_caching support as
-    # upstream - same env var, same fix class as gfx1201's.
+    # Same env var, same fix class as gfx1201's - CTranslate2's own
+    # cub_caching allocator, not anything fork-specific.
     env = MappingProxyType({"CT2_CUDA_ALLOCATOR": "cub_caching"})
 
     # GCN 4 has no packed FP16: fp16 math runs at a fraction of the fp32 rate,
     # so enabling it costs precision for no speedup.
     fp16_supported = False
-
-    # This image's onnxruntime predates the migraphx_model_cache_dir option;
-    # passing it fails session creation and drops the whole EP to CPU.
-    supports_model_cache_dir = False
-
-    # parakeet.cpp's HIP build returns a silent empty transcript on this arch
-    # (exit 0, no exception) - confirmed via local-test/asr_backends/parakeet_cpp.sh,
-    # while the same binary on Vulkan and whisper.cpp on either backend both
-    # produce correct transcripts. See docs/ASR_BACKENDS.md for the full matrix.
-    blocked_asr_backends = frozenset({("parakeet_cpp", "hip")})
-
-    def migraphx_models(self, providers):
-        # CLAP's audio graph has a Resize node this MIGraphX release refuses to
-        # parse, so MIGraphX could never serve CLAP here - and pairing it with
-        # the ROCM EP in one session segfaults the worker. Where the ROCM EP
-        # exists, CLAP goes there alone (extra_providers) and MIGraphX keeps
-        # musicnn only.
-        if ROCM in providers:
-            return ("musicnn",)
-        return super().migraphx_models(providers)
-
-    def extra_providers(self, providers):
-        # musicnn does not get the ROCM EP: MIGraphX already serves it and is
-        # faster. CLAP's ROCM EP session still needs ConvActivationFusion
-        # disabled: confirmed on real hardware that it still produces wrong
-        # output (and can still crash) even against the current base image,
-        # despite that image's MIOpen fix. See docs/ARCH_NOTES.md.
-        if ROCM not in providers:
-            return ()
-        return (ProviderSpec(
-            ROCM,
-            {"device_id": 0},
-            only_models=("clap",),
-            disable_optimizers=("ConvActivationFusion",),
-        ),)

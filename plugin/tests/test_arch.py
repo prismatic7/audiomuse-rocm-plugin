@@ -64,49 +64,23 @@ def test_the_inherited_env_cannot_be_mutated():
 
 
 class TestGfx803:
-    def test_declares_no_fp16_and_no_cache_dir(self):
+    def test_declares_no_fp16(self):
         profile = Gfx803Profile()
         assert profile.fp16_supported is False
-        assert profile.supports_model_cache_dir is False
+        assert profile.supports_model_cache_dir is True
 
-    def test_clap_moves_to_the_rocm_ep_when_that_ep_exists(self):
+    def test_offers_migraphx_for_both_models_regardless_of_other_providers(self):
         profile = Gfx803Profile()
-        providers = (MIGRAPHX, ROCM_EP, CPU)
+        for providers in ((MIGRAPHX, CPU), (MIGRAPHX, ROCM_EP, CPU)):
+            assert profile.migraphx_models(providers) == DEFAULT_MIGRAPHX_MODELS
+            assert profile.extra_providers(providers) == ()
 
-        assert profile.migraphx_models(providers) == ("musicnn",)
-        specs = profile.extra_providers(providers)
-        assert [(s.name, s.only_models) for s in specs] == [(ROCM_EP, ("clap",))]
-
-    def test_musicnn_never_goes_to_the_rocm_ep(self):
-        # MIOpen's fused-conv path faults on this arch, so routing musicnn there
-        # would trade a working GPU path for an intermittent worker crash.
-        specs = Gfx803Profile().extra_providers((MIGRAPHX, ROCM_EP, CPU))
-        for spec in specs:
-            assert "musicnn" not in spec.only_models
-
-    def test_clap_stays_on_migraphx_without_the_rocm_ep(self):
-        # Better a graph MIGraphX may refuse than no GPU provider at all: ORT
-        # falls back to CPU per session on a failed compile.
+    def test_blocks_no_asr_backends(self):
+        # parakeet.cpp HIP is confirmed working on this arch now (see
+        # docs/ASR_BACKENDS.md) - nothing left to block, inherits the base
+        # class default.
         profile = Gfx803Profile()
-        providers = (MIGRAPHX, CPU)
-
-        assert profile.migraphx_models(providers) == DEFAULT_MIGRAPHX_MODELS
-        assert profile.extra_providers(providers) == ()
-
-    def test_clap_on_the_rocm_ep_disables_conv_fusion(self):
-        # ORT's ConvActivationFusion emits FusedConv nodes that MIOpen's
-        # Fusion Plan kernels execute; on this arch those kernels produce
-        # wrong output (and can still crash), confirmed on real hardware
-        # against the current base image.
-        specs = Gfx803Profile().extra_providers((MIGRAPHX, ROCM_EP, CPU))
-        assert specs[0].disable_optimizers == ("ConvActivationFusion",)
-
-    def test_blocks_parakeet_cpp_hip(self):
-        # Confirmed silent empty output (exit 0, no exception) - see
-        # docs/ASR_BACKENDS.md. Every other (backend, variant) combo tested
-        # on this arch works, so nothing else is blocked here.
-        profile = Gfx803Profile()
-        assert profile.blocked_asr_backends == frozenset({("parakeet_cpp", "hip")})
+        assert profile.blocked_asr_backends == frozenset()
 
 
 class TestGfx1201:

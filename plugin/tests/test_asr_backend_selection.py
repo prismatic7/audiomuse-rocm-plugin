@@ -6,6 +6,7 @@ import pytest
 
 from plugin.rocm_accelerator import _resolve_asr_backend, register
 from plugin.rocm_accelerator.arch.base import ArchProfile
+from plugin.rocm_accelerator.arch.gfx803 import Gfx803Profile
 
 MIGRAPHX = "MIGraphXExecutionProvider"
 CPU = "CPUExecutionProvider"
@@ -66,15 +67,17 @@ class TestRegisterDispatchesByBackend:
 
         assert "asr" not in ctx.analysis_providers
 
-    def test_blocked_combo_on_gfx803_never_reaches_parakeet_cpp_hip(self, ctx, gpu, settings):
+    def test_gfx803_no_longer_blocks_parakeet_cpp_hip(self, ctx, gpu, settings):
+        # parakeet.cpp HIP is confirmed working on gfx803 now (see
+        # docs/ASR_BACKENDS.md) - resolution keeps the hip selection rather
+        # than falling back to vulkan/faster_whisper.
         gpu.arch = "gfx803"
         gpu.providers = (MIGRAPHX, CPU)
         settings["asr_backend"] = "parakeet_cpp"
         settings["asr_backend_variant"] = "hip"
 
-        # Falls back to parakeet_cpp+vulkan (also unavailable in the test env,
-        # binaries don't exist here), never faster_whisper, since only the
-        # hip variant is blocked for this arch.
-        register(ctx)
+        assert _resolve_asr_backend(Gfx803Profile()) == ("parakeet_cpp", "hip")
+
+        register(ctx)  # binaries absent in the test env - must not raise
 
         assert "asr" not in ctx.analysis_providers

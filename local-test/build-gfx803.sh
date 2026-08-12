@@ -2,8 +2,7 @@
 # Build and run the whole local stack for a Polaris / gfx803 test system.
 #
 # Wraps the two compose files with the gfx803-specific bits filled in: the
-# ROCm 6.x base image (gfx803 is a separate package upstream, not another tag
-# in the main arch matrix) and the host's render/video GIDs, which have to be
+# gfx803 base image tag and the host's render/video GIDs, which have to be
 # passed numerically because the base image has no matching groups.
 #
 # Core is built from source by default, since the published core image does not
@@ -22,15 +21,15 @@ compose=(-f "$here/docker-compose-rocm.yaml" -f "$here/docker-compose-source.yam
 build_only=0
 [ "${1:-}" = "--build-only" ] && build_only=1
 
-# gfx803 is ROCm 6.x on its own base package; the compose default targets RDNA4.
+# gfx803 is its own package upstream (Schaka/rocm-gfx803), not another tag in
+# the main arch matrix; the compose default targets RDNA4.
 export ROCM_BASE_IMAGE="${ROCM_BASE_IMAGE:-ghcr.io/schaka/rocm-migraphx-ort-torch-builder:latest-gfx803}"
 
-# That ROCm 6 base cannot use CTranslate2's prebuilt ROCm wheel (it wants
-# libhipblas.so.3, ROCm 7), so the ROCm fork is compiled from source for
-# gfx803. This is the long pole of the image build.
+# gfx803 isn't in CTranslate2's prebuilt-wheel arch list, so it needs the
+# source build like Vega/CDNA does - upstream OpenNMT/CTranslate2, the
+# Dockerfile's own default CT2_REPO/CT2_REF. This is the long pole of the
+# image build.
 export CT2_VARIANT="${CT2_VARIANT:-source}"
-export CT2_REPO="${CT2_REPO:-https://github.com/arlo-phoenix/CTranslate2-rocm.git}"
-export CT2_REF="${CT2_REF:-rocm}"
 export ROCM_ARCH="${ROCM_ARCH:-gfx803}"
 export AUDIOMUSE_CONTEXT="${AUDIOMUSE_CONTEXT:-https://github.com/Schaka/AudioMuse-AI.git#main}"
 export CORE_IMAGE="${CORE_IMAGE:-audiomuse-ai-core:local}"

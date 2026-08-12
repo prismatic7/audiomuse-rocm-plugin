@@ -19,32 +19,44 @@ dependency on rocBLAS, Tensile, or MIOpen.
 
 - `whisper.cpp` built with `GGML_HIP`: correct transcript, GPU used (`ROCm0`
   backend confirmed in logs).
-- `faster-whisper` (CTranslate2-rocm): fixed, now the plugin's default on
-  this arch. Works on exactly one configuration - **`float16` +
-  `CT2_CUDA_ALLOCATOR=cub_caching` + the conv1d workspace patch**
-  (`docker/patches/gfx803/conv1d-workspace-cap.patch`). Three separable bugs
-  stacked on top of each other: CT2's default `hipMallocAsync` allocator
-  page-faulting (fixed by cub_caching), MIOpen demanding a spurious ~1.44GB
-  Conv1D workspace whose failed allocation surfaced as a fake `CUDA failed
-  with error out of memory` (fixed by the patch), and the fp32 GEMM path
-  computing garbage. `float32` still produces multilingual token salad
-  (rocBLAS sgemm broken on this arch; same model + audio correct on CPU) and
-  `int8_float32` silently returns empty text - both stay unusable. Full
+- `faster-whisper` (CTranslate2): now the plugin's default on this arch, with
+  `CT2_CUDA_ALLOCATOR=cub_caching` fixing CT2's default `hipMallocAsync`
+  allocator page-faulting. Confirmed correct on real hardware for all three
+  compute types - `float16`, `float32`, and `int8_float32` all transcribe the
+  JFK sample identically and correctly on the current ROCm 7.14 base. Full
   write-up: `ARCH_NOTES.md`, "faster-whisper on gfx803".
+
+  This arch moved from a ROCm 6.4.4 base with its own CTranslate2 fork
+  (`arlo-phoenix/CTranslate2-rocm`, which added a from-scratch MIOpen Conv1D
+  backend the fork needed and upstream didn't have) to
+  [Schaka/rocm-gfx803](https://github.com/Schaka/rocm-gfx803)'s ROCm 7.14
+  base, the same base every other arch uses. CTranslate2 is now built from
+  upstream OpenNMT source for this arch too, same bucket as Vega/CDNA
+  (gfx900/906/908/90a/942) - no fork, no arch-specific patch. The Conv1D
+  workspace-cap patch the old fork needed is gone with it: it patched code
+  that only existed in that fork.
 - Parakeet-TDT 0.6B via `parakeet.cpp` built with `PARAKEET_GGML_HIP`
-  (~20+ layer Conformer encoder + TDT decoder): silent **empty** output on
-  GPU, `exit 0`, no error, as of the last test. Same input on CPU (same
+  (~20+ layer Conformer encoder + TDT decoder): confirmed **working** on the
+  new ROCm 7.14 base - correct transcript, GPU used. The earlier silent-empty
+  result below was against the old ROCm 6.4.4 base's rocBLAS/MIOpen, since
+  fixed by that base's own kernel-correctness work (see
+  [Schaka/rocm-gfx803](https://github.com/Schaka/rocm-gfx803)); not
+  re-tested on the intermediate combination (old CTranslate2 fixes, still on
+  ROCm 6.4.4) since the base moved on before that mattered.
+
+  <details><summary>Original ROCm 6.4.4 finding (superseded)</summary>
+
+  Silent **empty** output on GPU, `exit 0`, no error. Same input on CPU (same
   binary, no `--device` passthrough): perfect transcript with word-level
   timestamps.
 
-  **Needs re-testing** - the faster-whisper fixes above (allocator, workspace
-  patch) landed after this probe and weren't yet applied when it ran.
+  </details>
 
 ### Verdict for gfx803
 
 Vulkan for `whisper.cpp`/`parakeet.cpp` when HIP isn't confirmed working for
-them; faster-whisper's HIP path is fixed and is the shipped default.
-Parakeet-TDT via HIP is unconfirmed pending re-test.
+them; on the current ROCm 7.14 base, HIP is confirmed working for both
+engines and for faster-whisper, so all three ship their HIP variant here too.
 
 ## gfx900+ (Vega and newer)
 

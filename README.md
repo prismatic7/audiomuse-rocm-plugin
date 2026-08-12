@@ -210,9 +210,12 @@ Actions cache, keyed on the upstream digest or version.
 
 The ROCm bases come from
 [Schaka/rocm-migraphx-ort-builder](https://github.com/Schaka/rocm-migraphx-ort-builder):
-`rocm-migraphx-ort-torch-builder:rocm7.14-<arch>`, one tag per arch. The
-`latest-gfx803` tag lives in the same package but is built from a ROCm 6.4.4
-base by a separate workflow there, since ROCm 7 dropped Polaris support — it
-never got a `rocm7.14-gfx803` tag, so this repo's workflow still pulls
-`6.4.4-gfx803` for that one arch. `gfx1033` (Steam Deck) also has no
-`rocm7.14-gfx1033` base image, so it is dropped from the build matrix here.
+`rocm-migraphx-ort-torch-builder:rocm7.14-<arch>`, one tag per arch. gfx803
+(Polaris) is the exception - ROCm 7 dropped Polaris support outright, so its
+`rocm7.14-gfx803` tag is published by a separate repo,
+[Schaka/rocm-gfx803](https://github.com/Schaka/rocm-gfx803), which carries a
+from-source ROCR-Runtime/CLR rebuild restoring enumeration for it. Same
+package, same tag scheme either way - this repo's workflow doesn't need to
+know which upstream repo actually built a given arch's tag. `gfx1033` (Steam
+Deck) has no `rocm7.14-gfx1033` base image at all, so it is dropped from the
+build matrix here.

@@ -13,5 +13,4 @@ ignores an unknown provider name and silently runs the session on CPU.
 """
 
 MIGRAPHX = "MIGraphXExecutionProvider"
-ROCM = "ROCMExecutionProvider"
 CPU = "CPUExecutionProvider"

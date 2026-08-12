@@ -48,14 +48,6 @@ def _beam_size() -> int:
 
 # CTranslate2 mirrors the CUDA API on ROCm, so device="cuda" targets an AMD GPU.
 _DEVICE = os.environ.get("LYRICS_WHISPER_FASTER_DEVICE", "cuda").strip() or "cuda"
-# float16 is the only compute type that is BOTH stable and correct on gfx803
-# (see docs/ARCH_NOTES.md, "faster-whisper on gfx803"): float32 GEMMs return
-# garbage there (rocBLAS sgemm on the resurrected r9nano Tensile logic),
-# int8_float32 silently returns empty text, while fp16's hgemm path
-# transcribes correctly - so the plain CTranslate2-style float16 default is
-# also the right choice for that arch, and needs the conv1d workspace patch
-# plus CT2_CUDA_ALLOCATOR=cub_caching (both supplied by the gfx803
-# image/profile) to hold up.
 _COMPUTE_TYPE = os.environ.get("LYRICS_WHISPER_FASTER_COMPUTE_TYPE", "").strip() or "float16"
 _MODEL_DIR = os.environ.get(
     "LYRICS_WHISPER_FASTER_MODEL_DIR", "/app/model/faster-whisper-small"

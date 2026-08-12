@@ -116,81 +116,34 @@ class TestGfx803:
     @pytest.fixture(autouse=True)
     def polaris(self, gpu):
         gpu.arch = "gfx803"
-        gpu.providers = (MIGRAPHX, ROCM_EP, CPU)
+        gpu.providers = (MIGRAPHX, CPU)
         return gpu
 
-    def test_splits_the_two_models_across_the_two_providers(self, ctx):
+    def test_offers_migraphx_for_both_models(self, ctx):
         register(ctx)
 
-        assert ctx.labels_for(MIGRAPHX) == ["musicnn"]
-        assert ctx.labels_for(ROCM_EP) == ["clap"]
+        assert ctx.labels_for(MIGRAPHX) == ["musicnn", "clap"]
 
-    def test_never_offers_two_gpu_providers_for_one_model(self, ctx):
-        # A session holding both segfaults the worker, so no label may appear
-        # under more than one provider.
+    def test_registers_no_extra_providers_even_when_the_rocm_ep_is_present(self, ctx, gpu):
+        gpu.providers = (MIGRAPHX, ROCM_EP, CPU)
+
         register(ctx)
 
-        seen = {}
-        for provider in ctx.onnx_providers:
-            for label in provider["only_models"] or []:
-                seen.setdefault(label, set()).add(provider["name"])
-        assert all(len(names) == 1 for names in seen.values()), seen
+        assert ctx.providers_named(ROCM_EP) == []
 
-    def test_the_rocm_ep_needs_no_shape_pinning(self, ctx):
-        register(ctx)
-
-        assert providers_all(ctx, ROCM_EP, "needs_static_shapes") == [False]
-
-    def test_installs_the_conv_fusion_guard_for_the_rocm_ep(self, ctx, fake_ort):
-        register(ctx)
-
-        session = fake_ort.InferenceSession(
-            "clap.onnx", providers=[(ROCM_EP, {"device_id": 0}),
-                                    "CPUExecutionProvider"])
-        entries = session.sess_options.config_entries
-        assert entries == {
-            "optimization.disable_specified_optimizers": "ConvActivationFusion"}
-
-    def test_the_guard_leaves_migraphx_sessions_alone(self, ctx, fake_ort):
-        register(ctx)
-
-        session = fake_ort.InferenceSession(
-            "musicnn.onnx", providers=[(MIGRAPHX, {"device_id": 0}),
-                                       "CPUExecutionProvider"])
-        assert session.sess_options is None
-
-    def test_falls_back_to_per_model_cache_files(self, ctx, cache_root):
+    def test_uses_the_cache_directory_option(self, ctx, cache_root):
         register(ctx)
 
         options = ctx.providers_named(MIGRAPHX)[0]["options"]
-        assert "migraphx_model_cache_dir" not in options
-        assert options["migraphx_save_compiled_model"] == "True"
-        assert options["migraphx_save_model_path"] == str(cache_root / "fp32" / "musicnn.mxr")
-
-    def test_one_registration_and_cache_file_per_model(self, ctx, polaris, cache_root):
-        # Core keeps one options dict per registration, so a shared dict would
-        # point both models at the same compiled-model file. Two models land on
-        # MIGraphX here because this build has no ROCM EP to hand CLAP to.
-        polaris.providers = (MIGRAPHX, CPU)
-
-        register(ctx)
-
-        paths = [p["options"]["migraphx_save_model_path"] for p in ctx.providers_named(MIGRAPHX)]
-        assert paths == [
-            str(cache_root / "fp32" / "musicnn.mxr"),
-            str(cache_root / "fp32" / "clap.mxr"),
-        ]
-
-    def test_loads_an_existing_compiled_model_instead_of_saving(self, ctx, cache_root):
-        (cache_root / "fp32").mkdir(parents=True)
-        (cache_root / "fp32" / "musicnn.mxr").write_bytes(b"compiled")
-
-        register(ctx)
-
-        options = ctx.providers_named(MIGRAPHX)[0]["options"]
-        assert options["migraphx_load_compiled_model"] == "True"
-        assert options["migraphx_load_model_path"] == str(cache_root / "fp32" / "musicnn.mxr")
+        assert options["migraphx_model_cache_dir"] == str(cache_root / "fp32")
         assert "migraphx_save_compiled_model" not in options
+
+    def test_fp16_setting_is_ignored(self, ctx, settings):
+        settings["fp16_enable"] = True
+
+        register(ctx)
+
+        assert "migraphx_fp16_enable" not in ctx.providers_named(MIGRAPHX)[0]["options"]
 
     def test_still_swaps_the_asr_backend(self, ctx):
         register(ctx)

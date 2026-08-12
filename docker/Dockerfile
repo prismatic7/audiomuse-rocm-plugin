@@ -79,30 +79,18 @@ RUN set -eux; \
 # ============================================================================
 # Stage 2b: ct2-source - CTranslate2 compiled from source for one arch
 # ============================================================================
-# Used for the two cases the prebuilt wheel does not cover, parametrized by
-# CT2_REPO/CT2_REF rather than split into two near-identical stages:
-#
-#   * ROCm 6 bases (Polaris/gfx803) -> arlo-phoenix/CTranslate2-rocm, the
-#     maintained HIP port. Upstream's wheel wants ROCm 7's libhipblas.so.3 and
-#     dies at import there.
-#   * Vega/CDNA (gfx900, gfx906, gfx908, gfx90a, gfx942) -> OpenNMT/CTranslate2
-#     itself. The base is ROCm 7 so the wheel loads fine, but it is compiled
-#     only for gfx1030 and newer (see prepare_build_environment_linux_rocm.sh),
-#     so those arches would get no device code and fail at the first GPU
-#     transcribe with "no kernel image is available". Building the same
-#     upstream source for the actual arch is the whole fix - no fork needed.
-#
-# WITH_CUDNN=ON on the arlo-phoenix fork (gfx803): despite the CUDA-flavoured
-# name, this is what actually enables their from-scratch MIOpen backend for
-# Conv1D - hipDNN (the old cuDNN-alike) is unmaintained, so upstream CTranslate2
-# has no HIP path for Conv1D at all, and Whisper's encoder opens with two
-# Conv1D layers. Leaving this off builds fine and imports fine,
-# but every GPU transcribe then fails at the first Conv1D with "Conv1D on GPU.
+# Used for every arch outside the prebuilt wheel's exact coverage list
+# (upstream's ROCm release wheel is compiled only for
+# gfx1030,gfx1100,gfx1101,gfx1102,gfx1150,gfx1151,gfx1200,gfx1201 - see
+# prepare_build_environment_linux_rocm.sh): the wheel would import fine on any
+# other arch (gfx8xx/gfx9xx, older RDNA1/gfx10.1/gfx10.3 point releases,
+# gfx950, ...) and then fail at the first GPU transcribe with "no kernel image
+# is available" for lack of device code. Building the same upstream source for
+# the actual arch is the whole fix.
 #
 # CMAKE_POLICY_VERSION_MINIMUM covers third_party/cpu_features, which still asks
-# for cmake_minimum_required below 3.5 - removed outright in the CMake 4 on the
-# ROCm 7 bases (ROCm 6/gfx803 has CMake 3.x, where it is only a warning). The
-# variable is simply unused on the older CMake, so one flag serves both.
+# for cmake_minimum_required below 3.5 - removed outright in CMake 4 on this
+# image's base.
 FROM ${BASE_IMAGE} AS ct2-source
 ARG ROCM_ARCH
 ARG CT2_REPO=https://github.com/OpenNMT/CTranslate2.git
@@ -130,10 +118,6 @@ RUN set -eux; \
     llvm_bin="$(hipconfig -l)"; \
     export HIPCXX="${llvm_bin}/clang"; \
     export HIP_PATH="$(hipconfig -R)"; \
-    case "${CT2_REPO}" in \
-        *arlo-phoenix*) with_cudnn=ON ;; \
-        *) with_cudnn=OFF ;; \
-    esac; \
     cmake -S . -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -144,7 +128,7 @@ RUN set -eux; \
         -DWITH_OPENBLAS=ON \
         -DOPENMP_RUNTIME=COMP \
         -DWITH_HIP=ON \
-        -DWITH_CUDNN="${with_cudnn}" \
+        -DWITH_CUDNN=OFF \
         -DCMAKE_HIP_ARCHITECTURES="${ROCM_ARCH}" \
         -DBUILD_CLI=OFF \
         -DBUILD_TESTS=OFF; \
@@ -186,19 +170,11 @@ FROM ct2-${CT2_VARIANT} AS ct2
 # ============================================================================
 # Stages 3a-3d: whisper.cpp and parakeet.cpp, Vulkan and HIP variants
 # ============================================================================
-# Both engines confirmed working standalone (see docs/ASR_BACKENDS.md) -
-# selectable via the plugin's asr_backend/asr_backend_variant settings, one
-# CLI binary per (engine, variant) pair, both variants of an engine sharing
-# one model file (copied once into the runner stage below).
-#
-# parakeet.cpp's HIP build is skipped on Polaris (gfx803/802/805): confirmed
-# to produce silent empty transcripts there so there is nothing to
-# gain from spending build time and image space on a binary the plugin will
-# never select (Gfx803Profile.blocked_asr_backends refuses it). An empty
-# placeholder is emitted in its place so the runner's COPY --from below has
-# something to copy either way; whisper_cpp_backend.available()/
-# parakeet_cpp_backend.available() check the file is non-empty, not just
-# present, so the placeholder correctly reads as "unavailable".
+# Both engines confirmed working standalone on every arch, HIP included (see
+# docs/ASR_BACKENDS.md) - selectable via the plugin's asr_backend/
+# asr_backend_variant settings, one CLI binary per (engine, variant) pair,
+# both variants of an engine sharing one model file (copied once into the
+# runner stage below).
 FROM ${BASE_IMAGE} AS ggml-vulkan-deps
 RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get update; \
@@ -291,10 +267,10 @@ SHELL ["/bin/bash", "-c"]
 # after parakeet-cpp-vulkan instead of in parallel with it.
 COPY --from=parakeet-cpp-vulkan /build/build/examples/cli/parakeet-cli /tmp/parakeet-vulkan-sequencer
 RUN rm -f /tmp/parakeet-vulkan-sequencer
-# hipblas-dev/rocblas-dev: needed by name on gfx803's ROCm 6.4 base; gfx900+'s
-# ROCm 7.14 base already carries its own BLAS dev headers under a different
-# package name (amdrocm-blas-dev7.14 etc.), so this is a no-op there - hence
-# the `|| true` rather than a hard failure on the newer bases.
+# hipblas-dev/rocblas-dev: every base is ROCm 7.14 now, which carries its own
+# BLAS dev headers under a different package name (amdrocm-blas-dev7.14 etc.),
+# so this install is currently a no-op everywhere - `|| true` keeps it that
+# way rather than hard-failing if a future base ever needs it by this name.
 RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -315,24 +291,15 @@ SHELL ["/bin/bash", "-c"]
 COPY --from=whisper-cpp-hip /build/build/bin/whisper-cli /tmp/whisper-hip-sequencer
 RUN rm -f /tmp/whisper-hip-sequencer
 RUN set -eux; \
-    case "${ROCM_ARCH}" in \
-        gfx803|gfx802|gfx805) \
-            echo "parakeet.cpp HIP skipped on ${ROCM_ARCH} - confirmed broken, see docs/ASR_BACKENDS.md"; \
-            mkdir -p /build/build/examples/cli; \
-            : > /build/build/examples/cli/parakeet-cli; \
-            ;; \
-        *) \
-            DEBIAN_FRONTEND=noninteractive apt-get update; \
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                git cmake build-essential ca-certificates; \
-            (DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends hipblas-dev rocblas-dev || true); \
-            rm -rf /var/lib/apt/lists/*; \
-            git clone --recursive --depth 1 --branch "${PARAKEET_CPP_REF}" https://github.com/mudler/parakeet.cpp /build; \
-            cmake -S /build -B /build/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-                -DPARAKEET_GGML_HIP=1 -DAMDGPU_TARGETS="${ROCM_ARCH}"; \
-            cmake --build /build/build -j1 --target parakeet-cli; \
-            ;; \
-    esac
+    DEBIAN_FRONTEND=noninteractive apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        git cmake build-essential ca-certificates; \
+    (DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends hipblas-dev rocblas-dev || true); \
+    rm -rf /var/lib/apt/lists/*; \
+    git clone --recursive --depth 1 --branch "${PARAKEET_CPP_REF}" https://github.com/mudler/parakeet.cpp /build; \
+    cmake -S /build -B /build/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DPARAKEET_GGML_HIP=1 -DAMDGPU_TARGETS="${ROCM_ARCH}"; \
+    cmake --build /build/build -j1 --target parakeet-cli
 
 # ============================================================================
 # Stage 2: runner - ROCm base (MIGraphX ONNX Runtime) + app deps
@@ -394,8 +361,8 @@ RUN set -eux; \
 # faster-whisper on the AMD GPU via CTranslate2's ROCm HIP backend. The ROCm
 # Accelerator plugin registers this as the ASR backend; the libs must be present
 # in the image because the plugin ships no pip requirements. The wheel comes
-# from the ct2 stage - upstream's ROCm 7 release wheel, or the ROCm fork built
-# from source for a ROCm 6 base. faster-whisper itself is installed --no-deps:
+# from the ct2 stage - upstream's ROCm 7 release wheel, or upstream built from
+# source for this arch. faster-whisper itself is installed --no-deps:
 # its onnxruntime dependency would otherwise clobber the base MIGraphX ORT with
 # a CPU-only build.
 COPY --from=ct2 /ct2-out /tmp/ct2-out
@@ -435,11 +402,19 @@ ENV LANG=C.UTF-8 \
 # CT2_CUDA_ALLOCATOR is deliberately NOT set here: it's arch-specific (see
 # plugin/rocm_accelerator/arch/gfx1201.py), so every other arch gets to keep
 # CTranslate2's own default allocator instead of being pinned to one arch's fix.
+# KMP_DUPLICATE_LIB_OK=TRUE: CTranslate2 bundles its own libomp.so
+# (OPENMP_RUNTIME=COMP in the ct2-source build), which collides with
+# torch/onnxruntime's own copy already loaded in this process - without this,
+# the second OpenMP runtime to initialize aborts the process outright
+# ("OMP: Error #15"), not just a warning. Needed as soon as anything imports
+# both faster-whisper and torch/onnxruntime in the same process, which is
+# every real run here - not just the model prefetch below.
 ENV HSA_ENABLE_INTERRUPT=1 \
     MIOPEN_USER_DB_PATH=/app/.cache/miopen \
     MIOPEN_CUSTOM_CACHE_DIR=/app/.cache/miopen \
     LYRICS_WHISPER_FASTER_DEVICE=cuda \
-    LYRICS_WHISPER_FASTER_MODEL_DIR=/app/model/faster-whisper-small
+    LYRICS_WHISPER_FASTER_MODEL_DIR=/app/model/faster-whisper-small \
+    KMP_DUPLICATE_LIB_OK=TRUE
 RUN mkdir -p /app/.cache/miopen /app/.cache/migraphx && chmod 777 /app/.cache/miopen /app/.cache/migraphx
 
 # Pre-fetch the faster-whisper model so the image is self-contained. Verified

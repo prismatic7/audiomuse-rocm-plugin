@@ -6,7 +6,6 @@
 # `plugin-catalog` sidecar so you can install it from the Plugins UI.
 #
 # Prereqs: ROCm 7.x kernel driver (amdgpu), host user in `render`/`video` groups.
-# (gfx803/Polaris runs ROCm 6.x instead - see ROCM_BASE_IMAGE below.)
 #
 # Usage (from this repo's root):
 #   docker compose -f local-test/docker-compose-rocm.yaml up --build
@@ -14,7 +13,7 @@
 # To test a different arch, override the base image:
 #   ROCM_BASE_IMAGE=ghcr.io/schaka/rocm-migraphx-ort-torch-builder:latest-gfx1030 \
 #     docker compose -f local-test/docker-compose-rocm.yaml up --build
-# gfx803 also needs CT2_VARIANT/CT2_REPO/ROCM_ARCH; build-gfx803.sh sets them.
+# gfx803 also needs CT2_VARIANT/ROCM_ARCH; build-gfx803.sh sets them.
 #
 # Then, in the web UI (http://localhost:8000):
 #   1. Log in as admin, open Plugins > Repositories.
@@ -33,10 +32,12 @@ x-rocm-build: &rocm-build
     # override this with your own core build to see the plugin in the catalog:
     #   CORE_IMAGE=audiomuse-ai:local docker compose -f ... up --build
     CORE_IMAGE: ${CORE_IMAGE:-ghcr.io/neptunehub/audiomuse-ai:latest}
-    # "prebuilt" takes CTranslate2's ROCm release wheel, which only covers
-    # gfx1030+; "source" compiles CT2_REPO@CT2_REF for ROCM_ARCH, which gfx803
-    # (ROCm 6 -> the fork) and gfx9xx (outside the wheel's arch list ->
-    # upstream) both need. See docker/Dockerfile's ct2-* stages.
+    # "prebuilt" takes CTranslate2's ROCm release wheel, which only covers an
+    # exact arch list (gfx1030,gfx1100,gfx1101,gfx1102,gfx1150,gfx1151,
+    # gfx1200,gfx1201); "source" compiles upstream CT2_REPO@CT2_REF for
+    # ROCM_ARCH, which every other arch (gfx8xx, gfx9xx, older RDNA1/gfx10.1/
+    # gfx10.3, gfx950, ...) needs instead. See docker/Dockerfile's ct2-*
+    # stages.
     CT2_VARIANT: ${CT2_VARIANT:-prebuilt}
     CT2_REPO: ${CT2_REPO:-https://github.com/OpenNMT/CTranslate2.git}
     CT2_REF: ${CT2_REF:-v4.8.1}
