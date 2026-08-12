@@ -101,20 +101,9 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         git cmake ninja-build build-essential libopenblas-dev; \
     rm -rf /var/lib/apt/lists/*
-# Arch-specific source fixes, one directory per arch under docker/patches/.
-# Each patch documents its own why/what in its header; applied right after the
-# clone so a patch that stops applying fails the build loudly instead of
-# silently shipping unpatched code.
-COPY docker/patches/ /ct2-patches/
 RUN set -eux; \
     git clone --branch "${CT2_REF}" --depth 1 --recursive "${CT2_REPO}" /ct2-src; \
     cd /ct2-src; \
-    if compgen -G "/ct2-patches/${ROCM_ARCH}/*.patch" > /dev/null; then \
-        for p in "/ct2-patches/${ROCM_ARCH}"/*.patch; do \
-            echo "applying ${p}"; \
-            git apply --verbose "${p}"; \
-        done; \
-    fi; \
     llvm_bin="$(hipconfig -l)"; \
     export HIPCXX="${llvm_bin}/clang"; \
     export HIP_PATH="$(hipconfig -R)"; \
