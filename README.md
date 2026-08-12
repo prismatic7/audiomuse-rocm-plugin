@@ -35,6 +35,12 @@ One tag per arch — several arches' ROCm kernels do not fit in one image.
 | `latest-gfx900`, `-gfx90c`, `-gfx906`, `-gfx908`, `-gfx90a`, `-gfx942`, `-gfx950` | Vega / CDNA |
 | `latest-gfx803` | Polaris (RX 460–590) — experimental, see [docs/ARCH_NOTES.md](docs/ARCH_NOTES.md). `gfx806` (RX 470 8GB UEFI Mining) also validated, runs under this tag |
 
+`latest-gfx803` moved onto the ROCm 7.14 base as of plugin **1.1** — the
+same base every other arch already used. If you'd rather stay on the older
+ROCm 6.4.4 gfx803 base (for stability, or any other reason), pin the plugin
+to **1.0.1**, the last version built against it; 1.1+ assumes the 7.14
+worker image and is not tested against the 6.4.4 one.
+
 Also published: `:<version>-<arch>` pinned to an upstream AudioMuse-AI
 release (e.g. `:3.1.0-gfx1030`), for locking your worker to a specific
 upstream version instead of tracking `latest`. Unrelated to the plugin's own
