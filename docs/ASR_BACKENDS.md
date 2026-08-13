@@ -60,24 +60,16 @@ engines and for faster-whisper, so all three ship their HIP variant here too.
 
 ## gfx900+ (Vega and newer)
 
-Not part of the gfx803 investigation above - HIP is expected to actually work
-correctly here (no history of the Tensile kernel-selection class of bug on
-supported/current architectures), so `parakeet.cpp` with HIP is a real backend
-option, not just Vulkan.
-
 Confirmed working, smoke-tested against an RX 9070 XT (gfx1201) on the
 plugin's own `rocm-migraphx-ort-torch-builder` base image (ROCm 7.14):
 
 - `parakeet.cpp` built with `PARAKEET_GGML_HIP`: correct transcript,
-  `ROCm0` backend, no crash, no garbage - the exact opposite of gfx803's
-  result with the identical binary/model/build flags. Confirms the gfx803
-  bug is arch-specific, not something inherent to HIP + Parakeet.
+  `ROCm0` backend, no crash, no garbage.
 
-One packaging note from getting this running: gfx1201's base image is on
-ROCm 7.14, which renamed the hipBLAS/rocBLAS dev packages
-(`amdrocm-blas-dev7.14` etc.) - the `hipblas-dev`/`rocblas-dev` package names
-that work on gfx803's ROCm 6.4 base don't exist there, but aren't needed
-either: ROCm 7.14's base image already carries its own BLAS dev headers.
+One packaging note from getting this running: ROCm 7.14's base image renamed
+the hipBLAS/rocBLAS dev packages (`amdrocm-blas-dev7.14` etc.) versus older
+ROCm lines' `hipblas-dev`/`rocblas-dev` names - not needed either way, since
+the base image already carries its own BLAS dev headers.
 
 ## Docker image implications
 
@@ -94,10 +86,9 @@ notes from the investigation:
   by both `parakeet.cpp`'s Vulkan and HIP builds is the same file) - no
   reason to bake in duplicate copies of the same weights just because two
   backends can serve them.
-- gfx803 only ever needs the Vulkan variant of each backend; gfx900+ images
-  can carry HIP variants instead, keeping gfx803 images smaller and avoiding
-  shipping a HIP path on that arch that's known broken for anything but
-  whisper.cpp.
+- Every arch's image carries both the Vulkan and HIP variant of
+  `whisper.cpp`/`parakeet.cpp`; `docker/Dockerfile` builds both
+  unconditionally rather than gating per arch.
 
 ## Canary models
 

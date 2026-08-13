@@ -57,10 +57,11 @@ That is the whole wiring. `register()` needs no change.
 ## Routing a model to a different provider
 
 When MIGraphX cannot compile one model on an arch, take it out of
-`migraphx_models` and name it in a `ProviderSpec` instead. Two providers must
-never end up in one session — see
-[ARCH_NOTES.md](ARCH_NOTES.md#migraphx-and-the-rocm-ep-must-never-share-a-session)
-— which is what removing the label from `migraphx_models` guarantees.
+`migraphx_models` and name it in a `ProviderSpec` instead. No profile
+currently does this (see [ARCH_NOTES.md](ARCH_NOTES.md) for why gfx803 no
+longer needs to), but the seam stays for whichever future EP build hits it.
+Two providers must never end up in one session — removing the label from
+`migraphx_models` is what guarantees that.
 
 Provider names come from `plugin/rocm_accelerator/providers.py` rather than being
 spelled out — onnxruntime ignores a name it does not know and runs on CPU, so a
@@ -82,10 +83,9 @@ def extra_providers(self, providers):
     return (ProviderSpec(ROCM, {"device_id": 0}, only_models=("clap",)),)
 ```
 
-If the provider is only safe with one of ORT's graph optimizers turned off for
-that session (gfx803's ROCM EP + CLAP needs `ConvActivationFusion` disabled —
-see [ARCH_NOTES.md](ARCH_NOTES.md#clap-on-the-rocm-ep-needs-convactivationfusion-disabled)
-for why), name it in `disable_optimizers` instead of adding a seam in core:
+If the provider is only safe with one of ORT's graph optimizers turned off
+for that session, name it in `disable_optimizers` instead of adding a seam
+in core:
 
 ```python
 return (ProviderSpec(
