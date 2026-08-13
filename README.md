@@ -31,7 +31,7 @@ One tag per arch — several arches' ROCm kernels do not fit in one image.
 | `latest-gfx1100`, `-gfx1101`, `-gfx1102`, `-gfx1103` | RDNA3 (RX 7000, RDNA3 APUs) |
 | `latest-gfx1150`, `-gfx1151`, `-gfx1152`, `-gfx1153` | Phoenix / Strix / Strix Halo APUs |
 | `latest-gfx1030`, `-gfx1031`, `-gfx1032`, `-gfx1034`, `-gfx1035`, `-gfx1036` | RDNA2 (RX 6000, RDNA2 APUs) — not `gfx1033` (Steam Deck): no `rocm7.14-gfx1033` base image upstream. `gfx1031` validated on Sapphire GPRO X080 (RX 6700 equivalent) |
-| `latest-gfx1010`, `-gfx1011`, `-gfx1012` | RDNA1 (RX 5000) |
+| `latest-gfx1010`, `-gfx1011`, `-gfx1012` | RDNA1 (RX 5000) — `gfx1010` validated on RX 5700 XT |
 | `latest-gfx900`, `-gfx90c`, `-gfx906`, `-gfx908`, `-gfx90a`, `-gfx942`, `-gfx950` | Vega / CDNA |
 | `latest-gfx803` | Polaris (RX 460–590) — experimental, see [docs/ARCH_NOTES.md](docs/ARCH_NOTES.md). `gfx806` (RX 470 8GB UEFI Mining) also validated, runs under this tag |
 

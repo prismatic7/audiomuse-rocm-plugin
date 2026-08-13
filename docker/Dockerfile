@@ -458,7 +458,15 @@ RUN set -eux; \
 # prefetched above (core image doesn't have that path).
 COPY --from=core /app /app
 COPY docker/docker-entrypoint-rocm-wrapper.sh /app/docker-entrypoint-rocm-wrapper.sh
-COPY docker/supervisord-rocm.conf /etc/supervisor/conf.d/supervisord.conf
+# Use core's own supervisord.conf as-is (program names/commands change with
+# their taskqueue layout) rather than a hand-maintained copy that silently
+# drifts out of sync -- only the interpreter paths differ, since this image's
+# python/gunicorn live in /opt/venv instead of core's system /usr.
+COPY --from=core /etc/supervisor/conf.d/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN sed -i \
+        -e 's|/usr/bin/python3|/opt/venv/bin/python3|g' \
+        -e 's|/usr/local/bin/gunicorn|/opt/venv/bin/gunicorn|g' \
+        /etc/supervisor/conf.d/supervisord.conf
 RUN chmod +x /app/docker-entrypoint.sh /app/docker-entrypoint-rocm-wrapper.sh && \
     test -f /etc/supervisor/conf.d/supervisord.conf
 
