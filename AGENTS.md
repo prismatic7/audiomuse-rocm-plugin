@@ -1,5 +1,15 @@
 # Agent instructions for audiomuse-rocm-plugin
 
+## Fork-safety of GPU init
+
+`register()` runs once in the worker's parent process, which then forks a child
+per job. A HIP context does not survive `fork()`: any plugin code that
+initializes HIP at worker start (e.g. `torch.cuda.is_available()`) poisons every
+forked child — MIGraphX then dies on its first compile with "no kernel image is
+available for execution on the device". GPU probes must run in the job child,
+never in `register()`. The arch probe shells out to `rocminfo` for this reason;
+details and the failure modes live in `docs/ARCH_NOTES.md`.
+
 ## Comments
 
 - **Never comment on absence.** Don't write a comment explaining that

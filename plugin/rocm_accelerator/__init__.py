@@ -189,10 +189,4 @@ def register(ctx):
             asr_backend, asr_variant_label,
         )
 
-    if clustering.check_gpu_available():
-        clustering.install()
-    else:
-        logger.warning(
-            "no ROCm device visible to torch (torch.cuda.is_available() is "
-            "False) - clustering stays on the CPU scikit-learn path."
-        )
+    clustering.install()

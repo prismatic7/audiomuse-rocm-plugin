@@ -310,10 +310,6 @@ def install():
     (the source) and tasks.clustering_helper (where the functions are bound by
     `from .clustering_gpu import ...` at module import).
     """
-    if not check_gpu_available():
-        logger.warning("ROCm clustering backend not installed: no CUDA-capable torch")
-        return False
-
     try:
         import tasks.clustering_helper as helper
         import tasks.clustering_gpu as gpu

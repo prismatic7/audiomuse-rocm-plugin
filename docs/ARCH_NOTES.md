@@ -134,3 +134,12 @@ the "Cannot re-initialize CUDA in forked subprocess" warning seen elsewhere.
 `rocminfo` is a separate process with its own address space, so parsing its
 output detects the arch without initializing anything here, and GPU init still
 happens for the first time in the job's own child process.
+
+The same rule governs the clustering backend's GPU probe: `register()` never
+calls `torch.cuda.is_available()` (that call initializes the HIP runtime in the
+parent). The check is deferred to `get_clustering_model` / `get_pca_model`, which
+run inside the forked job child. When the probe ran in the parent, the first
+child's MIGraphX compile died with
+`no kernel image is available for execution on the device` at
+`kernel.cpp:70 load_module` — the ORT/MIGraphX face of the same fork bug
+(diagnosed as a bad base image until reproduced with `os.fork()` directly).
