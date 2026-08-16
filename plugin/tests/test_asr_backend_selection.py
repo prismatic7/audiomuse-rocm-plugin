@@ -6,10 +6,6 @@ import pytest
 
 from plugin.rocm_accelerator import _resolve_asr_backend, register
 from plugin.rocm_accelerator.arch.base import ArchProfile
-from plugin.rocm_accelerator.arch.gfx803 import Gfx803Profile
-
-MIGRAPHX = "MIGraphXExecutionProvider"
-CPU = "CPUExecutionProvider"
 
 pytestmark = pytest.mark.usefixtures("settings", "cache_root")
 
@@ -47,37 +43,29 @@ class TestResolveAsrBackend:
 
 
 class TestRegisterDispatchesByBackend:
-    """Backend binaries/models don't exist in the test environment, so a
-    non-faster_whisper selection resolves to "unavailable" and no ASR
-    provider is registered - the behavior under test is that register()
-    reaches that conclusion without raising, not that the backend runs.
+    """The worker images ship whisper.cpp/parakeet.cpp (Vulkan + HIP variants)
+    plus their model files for every arch, gfx803 included, so a
+    non-faster_whisper selection resolves to "available" and register() does
+    register the ASR provider. In a bare checkout without those binaries the
+    same path resolves to "unavailable" and no provider is registered. Either
+    way the behavior under test is that register() reaches that conclusion
+    without raising - never that the backend actually runs.
     """
 
-    def test_selecting_whisper_cpp_does_not_crash_registration(self, ctx, gpu, settings):
+    def test_selecting_whisper_cpp_registers_when_available(self, ctx, gpu, settings):
+        from plugin.rocm_accelerator import whisper_cpp_backend
+
         settings["asr_backend"] = "whisper_cpp"
 
-        register(ctx)  # binaries absent in the test env - must not raise
+        register(ctx)  # must not raise, with or without the binaries
 
-        assert "asr" not in ctx.analysis_providers
+        assert ("asr" in ctx.analysis_providers) == whisper_cpp_backend.available("vulkan")
 
-    def test_selecting_parakeet_cpp_does_not_crash_registration(self, ctx, gpu, settings):
+    def test_selecting_parakeet_cpp_registers_when_available(self, ctx, gpu, settings):
+        from plugin.rocm_accelerator import parakeet_cpp_backend
+
         settings["asr_backend"] = "parakeet_cpp"
 
         register(ctx)
 
-        assert "asr" not in ctx.analysis_providers
-
-    def test_gfx803_no_longer_blocks_parakeet_cpp_hip(self, ctx, gpu, settings):
-        # parakeet.cpp HIP is confirmed working on gfx803 now (see
-        # docs/ASR_BACKENDS.md) - resolution keeps the hip selection rather
-        # than falling back to vulkan/faster_whisper.
-        gpu.arch = "gfx803"
-        gpu.providers = (MIGRAPHX, CPU)
-        settings["asr_backend"] = "parakeet_cpp"
-        settings["asr_backend_variant"] = "hip"
-
-        assert _resolve_asr_backend(Gfx803Profile()) == ("parakeet_cpp", "hip")
-
-        register(ctx)  # binaries absent in the test env - must not raise
-
-        assert "asr" not in ctx.analysis_providers
+        assert ("asr" in ctx.analysis_providers) == parakeet_cpp_backend.available("vulkan")

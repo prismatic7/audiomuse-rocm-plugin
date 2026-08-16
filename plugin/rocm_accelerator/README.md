@@ -144,5 +144,14 @@ a CPU-only one, so every library this plugin needs has to come from the image.
 2. `register_analysis_provider('asr', factory)` — replaces the ASR component
    wholesale. The factory is resolved once per worker process, so the
    faster-whisper model stays loaded for a whole album like the built-in does.
+3. Clustering (`clustering.py`) — no core seam exists for clustering yet, so the
+   backend is installed in place at worker start: `clustering.install()` swaps
+   `tasks.clustering_gpu` / `tasks.clustering_helper` `get_clustering_model` /
+   `get_pca_model` / `check_gpu_available` for the native torch/ROCm versions.
+   It only activates when core's `USE_GPU_CLUSTERING` is enabled; otherwise
+   clustering stays on the CPU scikit-learn path. KMeans and PCA run on the GPU
+   (GEMM + `scatter_add` E/M-step; full SVD via `torch.linalg.svd`); DBSCAN,
+   GMM and spectral keep the sklearn CPU path, same as the NVIDIA build does
+   for GMM and spectral. No AudioMuse-AI core change is required.
 
 Requires core 3.1.0 or newer.

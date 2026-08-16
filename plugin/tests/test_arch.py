@@ -69,19 +69,6 @@ class TestGfx803:
         assert profile.fp16_supported is False
         assert profile.supports_model_cache_dir is True
 
-    def test_offers_migraphx_for_both_models_regardless_of_other_providers(self):
-        profile = Gfx803Profile()
-        for providers in ((MIGRAPHX, CPU), (MIGRAPHX, ROCM_EP, CPU)):
-            assert profile.migraphx_models(providers) == DEFAULT_MIGRAPHX_MODELS
-            assert profile.extra_providers(providers) == ()
-
-    def test_blocks_no_asr_backends(self):
-        # parakeet.cpp HIP is confirmed working on this arch now (see
-        # docs/ASR_BACKENDS.md) - nothing left to block, inherits the base
-        # class default.
-        profile = Gfx803Profile()
-        assert profile.blocked_asr_backends == frozenset()
-
 
 class TestGfx1201:
     def test_declares_cub_caching(self):

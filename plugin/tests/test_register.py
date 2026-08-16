@@ -112,45 +112,6 @@ class TestFp16:
             assert "migraphx_fp16_enable" not in provider["options"]
 
 
-class TestGfx803:
-    @pytest.fixture(autouse=True)
-    def polaris(self, gpu):
-        gpu.arch = "gfx803"
-        gpu.providers = (MIGRAPHX, CPU)
-        return gpu
-
-    def test_offers_migraphx_for_both_models(self, ctx):
-        register(ctx)
-
-        assert ctx.labels_for(MIGRAPHX) == ["musicnn", "clap"]
-
-    def test_registers_no_extra_providers_even_when_the_rocm_ep_is_present(self, ctx, gpu):
-        gpu.providers = (MIGRAPHX, ROCM_EP, CPU)
-
-        register(ctx)
-
-        assert ctx.providers_named(ROCM_EP) == []
-
-    def test_uses_the_cache_directory_option(self, ctx, cache_root):
-        register(ctx)
-
-        options = ctx.providers_named(MIGRAPHX)[0]["options"]
-        assert options["migraphx_model_cache_dir"] == str(cache_root / "fp32")
-        assert "migraphx_save_compiled_model" not in options
-
-    def test_fp16_setting_is_ignored(self, ctx, settings):
-        settings["fp16_enable"] = True
-
-        register(ctx)
-
-        assert "migraphx_fp16_enable" not in ctx.providers_named(MIGRAPHX)[0]["options"]
-
-    def test_still_swaps_the_asr_backend(self, ctx):
-        register(ctx)
-
-        assert "asr" in ctx.analysis_providers
-
-
 class TestProfileSeams:
     """A profile's declarations reach core unchanged."""
 

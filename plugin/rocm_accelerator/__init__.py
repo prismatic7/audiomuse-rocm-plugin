@@ -28,7 +28,7 @@ import logging
 
 from plugin.api import get_setting
 
-from . import arch, cache, gpu, ort_fusion_guard
+from . import arch, cache, clustering, gpu, ort_fusion_guard
 from .providers import MIGRAPHX
 
 logger = logging.getLogger("plugin.rocm_accelerator")
@@ -187,4 +187,12 @@ def register(ctx):
             "%s (variant=%s) unavailable on this image - lyrics ASR stays on the "
             "ONNX backend (CPU). musicnn acceleration is unaffected.",
             asr_backend, asr_variant_label,
+        )
+
+    if clustering.check_gpu_available():
+        clustering.install()
+    else:
+        logger.warning(
+            "no ROCm device visible to torch (torch.cuda.is_available() is "
+            "False) - clustering stays on the CPU scikit-learn path."
         )

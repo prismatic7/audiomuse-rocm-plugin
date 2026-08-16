@@ -114,8 +114,9 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: "redis://redis:6379/0"
       TEMP_DIR: "/app/temp_audio"
-      # cuML has no ROCm port; GPU clustering stays CPU. ONNX analysis uses the GPU.
-      USE_GPU_CLUSTERING: "false"
+      # Must be true for core to route clustering through the GPU path, which the
+      # plugin's torch/ROCm backend sits behind. Off -> core uses sklearn CPU.
+      USE_GPU_CLUSTERING: "true"
       # Uncomment to pin to a specific AMD GPU (index or UUID):
       # HIP_VISIBLE_DEVICES: "0"
     # --- AMD GPU passthrough ---
