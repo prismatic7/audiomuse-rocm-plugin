@@ -306,7 +306,7 @@ RUN set -ux; \
             python3 python3-pip python3-venv \
             libfftw3-double3 libyaml-0-2 libsamplerate0 libsndfile1 \
             libopenblas0 liblapack3 libgomp1 libpq5 \
-            ffmpeg wget curl supervisor procps \
+            ffmpeg libchromaprint-tools wget curl supervisor procps \
             git vim redis-tools strace iputils-ping \
             postgresql-common ca-certificates tzdata \
             && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
