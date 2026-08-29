@@ -1,0 +1,65 @@
+name: docker
+
+# Fork CI for the ROCm worker image.
+#  - check: fast static validation on every push/PR (GitHub runner — no image pull needed)
+#  - build: real image build on push to main / manual — runs on the self-hosted
+#    runner on horza, because the 30GB ROCm base cannot fit a hosted runner's
+#    disk. The built image lands in horza's local docker as
+#    ghcr.io/prismatic7/audiomuse-ai-rocm-xora:gfx1150-dev (+ a per-SHA tag)
+#    ready for deploy.sh; layer cache is shared with the manual builds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+          failure-threshold: error
+
+      - name: Validate build graph (no image pull)
+        uses: docker/setup-buildx-action@v3
+
+      - name: buildx --check
+        run: |
+          docker buildx build --check \
+            --build-arg BASE_IMAGE=ghcr.io/schaka/rocm-migraphx-ort-torch-builder:latest-gfx1150 \
+            --build-arg CORE_IMAGE=ghcr.io/neptunehub/audiomuse-ai:latest \
+            --build-arg CT2_VARIANT=prebuilt \
+            --build-arg ROCM_ARCH=gfx1150 \
+            -f docker/Dockerfile .
+
+  build:
+    if: github.event_name != 'pull_request'
+    needs: check
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build worker image (MIGraphX develop base)
+        run: |
+          docker buildx build \
+            --build-arg BASE_IMAGE=ghcr.io/schaka/rocm-migraphx-ort-torch-builder:latest-gfx1150 \
+            --build-arg CORE_IMAGE=ghcr.io/neptunehub/audiomuse-ai:latest \
+            --build-arg CT2_VARIANT=prebuilt \
+            --build-arg ROCM_ARCH=gfx1150 \
+            -t ghcr.io/prismatic7/audiomuse-ai-rocm-xora:gfx1150-dev \
+            -t ghcr.io/prismatic7/audiomuse-ai-rocm-xora:ci-${{ github.sha }} \
+            -f docker/Dockerfile .
+
+      - name: Report image sizes
+        run: docker images ghcr.io/prismatic7/audiomuse-ai-rocm-xora --format '{{.Tag}}\t{{.Size}}'
