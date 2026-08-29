@@ -317,7 +317,7 @@ def install():
         logger.warning("ROCm clustering backend not installed: %s", e)
         return False
 
-    if not helper.USE_GPU_CLUSTERING:
+    if not getattr(helper, 'USE_GPU_CLUSTERING', False):
         logger.info(
             "ROCm clustering backend available but USE_GPU_CLUSTERING is off - "
             "leaving core's clustering on the CPU scikit-learn path."

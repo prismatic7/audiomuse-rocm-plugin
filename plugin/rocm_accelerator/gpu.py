@@ -60,10 +60,43 @@ def faster_whisper_available() -> bool:
 
     Broad on purpose: a half-built CTranslate2 raises out of its extension
     module rather than an ImportError, and either way it cannot be used.
+
+    gfx1150 (Strix Point APU) note: on ROCm 10.1 / this image line, importing
+    faster_whisper (CTranslate2's HIP extension) hard-aborts the whole process
+    with `LLVM ERROR: support is already registered for analysis: AnalysisName
+    (PointerFlowAnalysisResult)` - duplicate LLVM analysis registration between
+    CTranslate2's bundled LLVM and the MIGraphX/ORT one, inside one address
+    space. It kills the WORKER, not just the load. Even though the import
+    succeeds, refuse this backend so lyrics ASR falls back instead of taking
+    analysis down (measured 2026-08-29, AudioMuse-AI v3.5.0, MIGraphX develop
+    b373a823).
     """
     try:
         import faster_whisper  # noqa: F401
 
-        return True
+    except Exception:
+        return False
+    if _ct2_llvm_conflict_expected():
+        logger.warning(
+            "faster-whisper on this arch/image aborts the process at import "
+            "(duplicate LLVM analysis registration); refusing it so ASR falls "
+            "back to whisper_cpp/ONNX. Set ROCM_ALLOW_CTRANSLATE2=1 to override."
+        )
+        return False
+    return True
+
+
+def _ct2_llvm_conflict_expected() -> bool:
+    """Arch/ROCm combos where CT2's bundled LLVM collides with MIGraphX's.
+
+    Currently: gfx1150 on this image line (see the docstring above for the
+    measured failure). Other arches keep the old behaviour (available=True).
+    """
+    import os
+
+    if os.environ.get("ROCM_ALLOW_CTRANSLATE2", "").strip() == "1":
+        return False
+    try:
+        return detect_arch() in ("gfx1150", "gfx1151", "gfx1152", "gfx1153")
     except Exception:
         return False
