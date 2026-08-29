@@ -413,7 +413,7 @@ RUN mkdir -p /app/.cache/miopen /app/.cache/migraphx && chmod 777 /app/.cache/mi
 # The compute type is negotiated exactly as whisper_faster.py's CPU fallback
 # does: int8 needs a oneDNN/MKL build of CTranslate2, which the OpenBLAS-only
 # source builds are not, so float32 has to be accepted as a pass.
-COPY ct2check.py /tmp/ct2check.py
+COPY docker/ct2check.py /tmp/ct2check.py
 RUN set -eux; \
     "$VIRTUAL_ENV/bin/python3" -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small', local_dir='/app/model/faster-whisper-small')"; \
     test -f /app/model/faster-whisper-small/model.bin; \
