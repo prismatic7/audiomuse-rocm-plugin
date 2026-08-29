@@ -413,23 +413,12 @@ RUN mkdir -p /app/.cache/miopen /app/.cache/migraphx && chmod 777 /app/.cache/mi
 # The compute type is negotiated exactly as whisper_faster.py's CPU fallback
 # does: int8 needs a oneDNN/MKL build of CTranslate2, which the OpenBLAS-only
 # source builds are not, so float32 has to be accepted as a pass.
+COPY ct2check.py /tmp/ct2check.py
 RUN set -eux; \
     "$VIRTUAL_ENV/bin/python3" -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small', local_dir='/app/model/faster-whisper-small')"; \
     test -f /app/model/faster-whisper-small/model.bin; \
-    "$VIRTUAL_ENV/bin/python3" - <<'PY'
-from faster_whisper import WhisperModel
-
-for compute in ("int8", "float32"):
-    try:
-        WhisperModel("/app/model/faster-whisper-small", device="cpu", compute_type=compute)
-    except ValueError as exc:
-        print(f"compute_type={compute} unsupported: {exc}")
-        continue
-    print(f"faster-whisper model loads standalone OK (CPU, {compute})")
-    break
-else:
-    raise SystemExit("faster-whisper model failed to load on CPU with any compute type")
-PY
+    "$VIRTUAL_ENV/bin/python3" /tmp/ct2check.py; \
+    rm -f /tmp/ct2check.py
 
 # whisper.cpp and parakeet.cpp: Vulkan and HIP CLI binaries, selectable via
 # the plugin's asr_backend/asr_backend_variant settings (see
